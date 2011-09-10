@@ -1,0 +1,29 @@
+This project is an attempt to adapt the dodo object model to Javascript
+
+Dodo home: http://dodo.sourceforge.net
+
+Translation table:
+
+             Dodo                |            Javascript
+_________________________________|________________________________
+                                 |
+ struct                          | struct
+                                 |
+ self                            | this
+                                 |
+ new var0(x: 1) {def z = 36}     | copy(var0, 'x', 1, {z: 36})
+                                 |
+ ^func                           | $func
+                                 |
+ class A {def col="blue"}        | var A = new Class({col: "blue"});
+                                 |
+ class B {B(n) {print(n)}}       | var B = new Class({}, {1: function(n)
+                                 |         {print(n);}});
+                                 |
+                                 |   NOTE: "1" is the argument count
+                                 |   of the constructor
+                                 |
+ def C = new A {def p = 0}       | var C = new A.constructor({p: 0});
+                                 |
+ B(1000)                         | new B(1000)
+                                 |
