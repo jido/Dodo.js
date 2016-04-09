@@ -4,15 +4,15 @@ var dodo = {};
 
 if ("console" in window && "log" in console) 
 {
-    dodo.log = function() {
+    dodo.log = function log() {
         console.log.apply(console, arguments);
     };
-    dodo.dumpLog = function() {};
+    dodo.dumpLog = function dumpLog() {};
 }
 else 
 {
     dodo.logMessages = "";
-    dodo.log = function() {
+    dodo.log = function log() {
         var line = "";
         var len = arguments.length;
         for (var i = 0; i < len; i++) 
@@ -21,12 +21,12 @@ else
         }
         dodo.logMessages += line + "\n";
     };
-    dodo.dumpLog = function() {
+    dodo.dumpLog = function dumpLog() {
         throw new Error(dodo.logMessages);
     };
 }
 
-dodo.toString = function() {
+dodo.toString = function toString() {
     var desc = "{";
     for (var attr in this) 
     {
@@ -46,20 +46,20 @@ dodo.log("Loading dodo object model");
 
 if ("create" in Object) 
 {
-    dodo.create = function(o) {
+    dodo.create = function create(o) {
         return Object.create(o);
     };
 }
 else 
 {
-    dodo.create = function (o) {
+    dodo.create = function create(o) {
         function F() {}
         F.prototype = o;
         return new F();
     };
 }
 
-dodo.definePropertyFailback = function (o, name, descriptor) {
+dodo.definePropertyFailback = function definePropertyFailback(o, name, descriptor) {
     if ("value" in descriptor) 
     {
         o[name] = descriptor.value;
@@ -87,7 +87,7 @@ if ("defineProperty" in Object)
 
 if (dodo.canDefineProperty) 
 {
-    dodo._defineProperty = function(o, name, descriptor) {
+    dodo._defineProperty = function _defineProperty(o, name, descriptor) {
         try {
             Object.defineProperty(o, name, descriptor);
         }
@@ -104,19 +104,23 @@ else
 }
 
 dodo.objectType = (function(global) {
-    return function type(value) {
+    return function objectType(value) {
         if (value === global)
         {
             return "global";
         }
+        else if ('typename' in value.constructor)
+        {
+            return value.constructor.typename;
+        }
         else
         {
-                return Object.prototype.toString.call(value);
+            return Object.prototype.toString.call(value);
         }
     };
 })(this);
 
-dodo.checkType = function(variable, value, reference) {
+dodo.checkType = function checkType(variable, value, reference) {
     if (typeof value !== typeof reference ||
             (value instanceof Object && !(value instanceof reference.constructor)))
     {
@@ -140,7 +144,7 @@ function copy(proto, changes) {
     return self;
 }
 
-function extend(proto, extension) {
+dodo.extend = function extend(proto, extension, canMakeType) {
     var self = dodo.create(proto);
     var extended = false;
     for (var attribute in extension) 
@@ -165,23 +169,46 @@ function extend(proto, extension) {
         }
         dodo._defineProperty(self, attribute, {value: value, writable: false, enumerable: true});
     }
-    if (extended)
+    if (extended && canMakeType)
     {
-        if (self.toString !== dodo.toString)
-        {
-            self.toString = dodo.toString;
-        }
-        var MakeInstance = function() {
-            return copy(self);
-        };
-        dodo._defineProperty(self, 'constructor', {value: MakeInstance, writable: false, enumerable: false});
-        MakeInstance.prototype = proto;
-        MakeInstance.instance = self;
+        var name = ('typename' in proto.constructor)? proto.constructor.typename: "extend " + dodo.objectType(proto);
+        dodo.MakeType(name, proto, self);
     }
     return self;
 }
 
-var x = extend({}, {a:3, z:true, b:{}});
-alert(copy(x, {a:-5.6}));
+dodo.MakeType = function MakeType(name, proto, instance) {
+    var MakeInstance = function MakeInstance() {
+        var self = copy(instance);
+        self.init.apply(self, arguments);
+        return self;
+    };
+    dodo._defineProperty(MakeInstance, 'typename', {value: name, writable: false, enumerable: true});
+    MakeInstance.prototype = proto;
+    MakeInstance.instance = instance;
+    
+    dodo._defineProperty(instance, 'constructor', {value: MakeInstance, writable: false, enumerable: false});
+    if (!('init' in instance))
+    {
+        dodo._defineProperty(instance, 'init', {value: function init() {}, writable: false, enumerable: false});
+    }
+    
+    return MakeInstance;
+};
+
+function extend(proto, extension) {
+    return dodo.extend(proto, extension, true);
+}
+
+function Create(proto, name, body) {
+    return dodo.MakeType(name, proto, dodo.extend(proto, body, false));
+}
+
+dodo.Type = Create({}, "dodo.Type");
+var struct = dodo.Type.instance;
+dodo._defineProperty(struct, 'toString', {value: dodo.toString, writable: false, enumerable: false});
+
+var x = extend(struct, {a:3, z:true, b:{}});
+alert(dodo.objectType(x) + " " + copy(x, {a:-5.6}));
 var y = extend(x, {c:"hi", $a:9});
-copy(copy(x, {b:y}), {b:x});
+alert(copy(copy(x, {b:x}), {b:y}));
