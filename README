@@ -17,14 +17,12 @@ _________________________________|________________________________
                                  |
  ^func                           | $func
                                  |
- class A {def col="blue"}        | var A = extend(class, {col: "blue"})
-                                 |  .constructor;
+ class A {def col="blue"}        | var A = Create(class, "A", {col: "blue"});
                                  |
- class B {B(n) {print(n)}}       | var B = copy(class.constructor, {init: function(n) {print(n);}
+ class B {B(n) {print(n)}}       | var B = Create(class, "B", {$init: function(n) {print(n);}
                                  |    });
                                  |
- def C = new A {def p = 0}       | var C = extend(A.instance, {p: 0})
-                                 |  .constructor;
+ def C = new A {def p = 0}       | var C = Create(A.instance, "C", {p: 0});
                                  |
  B(1000)                         | B(1000)
                                  |
