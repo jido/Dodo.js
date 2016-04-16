@@ -187,15 +187,13 @@ dodo.extend = function extend(self, extension) {
 }
 
 dodo.MakeType = function MakeType(name, proto, instance) {
-    if (!(instance instanceof proto.constructor))
-    {
-        throw new Error("MakeType: instance: " + instance + " must belong to type: " + dodo.objectType(proto));
-    }
-    
+    dodo.checkType('instance', instance, proto);
+
     var MakeInstance = function MakeInstance() {
-        var self = copy(instance);
-        self.init.apply(self, arguments);
-        return self;
+        var data = {constructor: MakeInstance};
+        instance.init.apply(data, arguments);
+        delete data.constructor;
+        return copy(instance, data);
     };
     dodo._defineProperty(MakeInstance, 'typename', {value: name, writable: false, enumerable: true});
     MakeInstance.prototype = proto;
@@ -229,7 +227,7 @@ function Create(proto, name, body) {
     return dodo.MakeType(name, proto, instance);
 }
 
-dodo.Type = Create({}, "dodo.Type");
+dodo.Type = Create({}, 'dodo.Type');
 var struct = dodo.Type.instance;
 dodo._defineProperty(struct, 'toString', {value: dodo.toString, writable: false, enumerable: false});
 
