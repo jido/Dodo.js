@@ -109,6 +109,10 @@ dodo.objectType = (function(global) {
         {
             return "global";
         }
+        else if (value === undefined)
+        {
+            return "undefined";
+        }
         else if ('typename' in value.constructor)
         {
             return value.constructor.typename;
@@ -124,7 +128,7 @@ dodo.checkType = function checkType(variable, value, reference) {
     if (typeof value !== typeof reference ||
             (value instanceof Object && !(value instanceof reference.constructor)))
     {
-        throw new Error("checkType: incompatible type: " + variable + " is " + 
+        throw new Error("checkType: incompatible type: supplied " + variable + " is " + 
                 dodo.objectType(value) + ", expected: " + dodo.objectType(reference));
     }
 };
@@ -133,19 +137,29 @@ function copy(proto, changes) {
     var self = dodo.create(proto);
     for (var attribute in changes)
     {
-        if (!(attribute in proto))
+        var value = changes[attribute];
+        var dot = attribute.indexOf("$");
+        var attr = (dot === -1)? attribute: attribute.substr(0, dot);
+        if (!(attr in proto))
         {
             throw new Error("copy: unknown attribute: " + attribute);
         }
-        var value = changes[attribute];
-        dodo.checkType(attribute, value, proto[attribute]);
-        dodo._defineProperty(self, attribute, {value: value, writable: false, enumerable: true});
+        if (dot !== -1)
+        {
+            var change = {};
+            change[attribute.substr(dot + 1)] = value;
+            value = copy(proto[attr], change);
+        }
+        else
+        {
+            dodo.checkType(attr, value, proto[attr]);
+        }
+        dodo._defineProperty(self, attr, {value: value, writable: false, enumerable: true});
     }
     return self;
 }
 
-dodo.extend = function extend(proto, extension, canMakeType) {
-    var self = dodo.create(proto);
+dodo.extend = function extend(self, extension) {
     var extended = false;
     for (var attribute in extension) 
     {
@@ -153,13 +167,13 @@ dodo.extend = function extend(proto, extension, canMakeType) {
         if (attribute.lastIndexOf("$", 0) === 0)
         {
             attribute = attribute.substr(1);
-            if (!(attribute in proto)) 
+            if (!(attribute in self)) 
             {
                 throw new Error("extend: cannot override unknown attribute: " + attribute);
             }
-            dodo.checkType(attribute, value, proto[attribute]);
+            dodo.checkType(attribute, value, self[attribute]);
         }
-        else if (attribute in proto)
+        else if (attribute in self)
         {
             throw new Error("extend: attribute already exists: " + attribute);
         }
@@ -169,15 +183,15 @@ dodo.extend = function extend(proto, extension, canMakeType) {
         }
         dodo._defineProperty(self, attribute, {value: value, writable: false, enumerable: true});
     }
-    if (extended && canMakeType)
-    {
-        var name = ('typename' in proto.constructor)? proto.constructor.typename: "extend " + dodo.objectType(proto);
-        dodo.MakeType(name, proto, self);
-    }
-    return self;
+    return extended;
 }
 
 dodo.MakeType = function MakeType(name, proto, instance) {
+    if (!(instance instanceof proto.constructor))
+    {
+        throw new Error("MakeType: instance: " + instance + " must belong to type: " + dodo.objectType(proto));
+    }
+    
     var MakeInstance = function MakeInstance() {
         var self = copy(instance);
         self.init.apply(self, arguments);
@@ -197,18 +211,52 @@ dodo.MakeType = function MakeType(name, proto, instance) {
 };
 
 function extend(proto, extension) {
-    return dodo.extend(proto, extension, true);
+    var self = dodo.create(proto);
+    if (dodo.extend(self, extension))
+    {
+        // Create a new type since self was extended with new attributes
+        var name = ('typename' in proto.constructor)
+            ? proto.constructor.typename
+            : "extend " + dodo.objectType(proto);
+        dodo.MakeType(name, proto, self);
+    }
+    return self;
 }
 
 function Create(proto, name, body) {
-    return dodo.MakeType(name, proto, dodo.extend(proto, body, false));
+    var instance = dodo.create(proto);
+    dodo.extend(instance, body);
+    return dodo.MakeType(name, proto, instance);
 }
 
 dodo.Type = Create({}, "dodo.Type");
 var struct = dodo.Type.instance;
 dodo._defineProperty(struct, 'toString', {value: dodo.toString, writable: false, enumerable: false});
 
+// Examples of use
+
+// Create a struct x with attributes a, z and b
 var x = extend(struct, {a:3, z:true, b:{}});
+// Display a copy of x where a is replaced with a different value
 alert(dodo.objectType(x) + " " + copy(x, {a:-5.6}));
+// Extend x to create a variable y with additional attribute c and a new value for a
 var y = extend(x, {c:"hi", $a:9});
-alert(copy(copy(x, {b:x}), {b:y}));
+// Type checking: x extends {} and y extends x, so z can be created as follows
+var z = copy(copy(x, {b:x}), {b:y});
+// Nesting: since z.b is a struct containing attribute b (z.b == x), display a copy of z with a new value for z.b.b
+alert(copy(z, {b$b:extend(struct, {j:"dodo"})}));
+
+// Create a new type A with prototype struct and attribute col
+var A = Create(struct, "A", {col:"blue"});
+// Create a new type B with prototype struct and a new constructor
+var B = Create(struct, "B", {$init:function(n) {dodo.log(n);}});
+// Create a new type C based on A with a new attribute p
+var C = Create(A(), "C", {p:0});
+
+// Call the constructor of B
+B(1000);
+// Create a new C and display it
+alert(C());
+
+
+dodo.dumpLog();
