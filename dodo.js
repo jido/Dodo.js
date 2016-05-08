@@ -1,6 +1,6 @@
 "use strict";
 
-var dodo = {};
+var dodo = {FAST: true};
 
 if ("console" in window && "log" in console) 
 {
@@ -46,16 +46,51 @@ dodo.log("Loading dodo object model");
 
 if ("create" in Object) 
 {
-    dodo.create = function create(o) {
-        return Object.create(o);
-    };
+    dodo.create = Object.create;
 }
 else 
 {
+    dodo.FAST = false;
     dodo.create = function create(o) {
         function F() {}
         F.prototype = o;
         return new F();
+    };
+}
+
+if (dodo.create({}, {v:{value:true}}).v)
+{
+    console.log("FAST copy enabled");
+}
+else
+{
+    var old_create = dodo.create;
+    
+    dodo.create = function create(o, props) {
+        var self = old_create(o);
+        for (name in props)
+        {
+            dodo._defineProperty(self, name, props[name]);
+        }
+        return self;
+    };
+}
+
+if ("assign" in Object)
+{
+    dodo.assign = Object.assign;
+}
+else
+{
+    dodo.assign = function assign(o) {
+        for (var n = 1; n < arguments.length; ++n)
+        {
+            var source = arguments[n];
+            for (var name in source)
+            {
+                o[name] = source[name];
+            }
+        }
     };
 }
 
@@ -87,15 +122,17 @@ if ("defineProperty" in Object)
 
 if (dodo.canDefineProperty) 
 {
-    dodo._defineProperty = function _defineProperty(o, name, descriptor) {
-        try {
-            Object.defineProperty(o, name, descriptor);
-        }
-        catch (someException) {
-            dodo.log("dodo._defineProperty: ", someException);
-            dodo.definePropertyFailback(o, name, descriptor);
-        }
-    };
+    dodo._defineProperty = dodo.FAST
+        ? Object.defineProperty
+        : function _defineProperty(o, name, descriptor) {
+            try {
+                Object.defineProperty(o, name, descriptor);
+            }
+            catch (someException) {
+                dodo.log("dodo._defineProperty: ", someException);
+                dodo.definePropertyFailback(o, name, descriptor);
+            }
+        };
 }
 else
 {
@@ -133,30 +170,37 @@ dodo.checkType = function checkType(variable, value, reference) {
     }
 };
 
-function copy(proto, changes) {
-    var self = dodo.create(proto);
-    for (var attribute in changes)
+function copy(proto) {
+    if (arguments.length < 2) return dodo.create(proto);
+    var props = {};
+    for (var n = 1; n < arguments.length; ++n)
     {
-        var value = changes[attribute];
-        var dot = attribute.indexOf("$");
-        var attr = (dot === -1)? attribute: attribute.substr(0, dot);
-        if (!(attr in proto))
+        var changes = arguments[n];
+        for (var attribute in changes)
         {
-            throw new Error("copy: unknown attribute: " + attribute);
+            var value = changes[attribute];
+            var dot = attribute.indexOf("$");
+            var attr = attribute;
+            if (dot !== -1)
+            {
+                attr = attribute.substr(0, dot);
+                if (!(attr in proto))
+                {
+                    throw new Error("copy: unknown attribute: " + attribute);
+                }
+                var change = {};
+                change[attribute.substr(dot + 1)] = value;
+                value = copy(proto[attr], change);
+            }
+            else
+            {
+                dodo.checkType(attr, value, proto[attr]);
+            }
+            var prop = {value: value, writable: false, enumerable: true};
+            props[attr] = prop;
         }
-        if (dot !== -1)
-        {
-            var change = {};
-            change[attribute.substr(dot + 1)] = value;
-            value = copy(proto[attr], change);
-        }
-        else
-        {
-            dodo.checkType(attr, value, proto[attr]);
-        }
-        dodo._defineProperty(self, attr, {value: value, writable: false, enumerable: true});
     }
-    return self;
+    return dodo.create(proto, props);
 }
 
 dodo.extend = function extend(self, extension) {
@@ -193,7 +237,7 @@ dodo.MakeType = function MakeType(name, proto, instance) {
         var data = {constructor: MakeInstance};
         instance.init.apply(data, arguments);
         delete data.constructor;
-        return copy(instance, data);
+        return dodo.copy(instance, data);
     };
     dodo._defineProperty(MakeInstance, 'typename', {value: name, writable: false, enumerable: true});
     MakeInstance.prototype = proto;
@@ -231,6 +275,7 @@ dodo.Type = Create({}, 'dodo.Type');
 var struct = dodo.Type.instance;
 dodo._defineProperty(struct, 'toString', {value: dodo.toString, writable: false, enumerable: false});
 
+/*
 // Examples of use
 
 // Create a struct x with attributes a, z and b
@@ -258,3 +303,4 @@ alert(C());
 
 
 dodo.dumpLog();
+*/
