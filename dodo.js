@@ -237,7 +237,7 @@ dodo.MakeType = function MakeType(name, proto, instance) {
         var data = {constructor: MakeInstance};
         instance.init.apply(data, arguments);
         delete data.constructor;
-        return dodo.create(instance, data);
+        return copy(instance, data);
     };
     dodo._defineProperty(MakeInstance, 'typename', {value: name, writable: false, enumerable: true});
     MakeInstance.prototype = proto;
